@@ -1,0 +1,8 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "sqs-practice"
+resolve_s3 = true
+s3_prefix = "sqs-practice"
+region = "eu-central-1"
+capabilities = "CAPABILITY_IAM"
+image_repositories = []

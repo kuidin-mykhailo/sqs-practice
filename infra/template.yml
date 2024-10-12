@@ -1,0 +1,286 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  # Event Bus
+  EventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: DefaultEventBus
+
+  # SQS Queues
+  TransformQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TransformQueue
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt TransformDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  TransformDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: TransformQueue-DeadLetter
+
+  BatchingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: BatchingQueue
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt BatchingDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  BatchingDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: BatchingQueue-DeadLetter
+
+  # Scheduler Events
+  MinuteSchedulerEvent:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression: rate(60 minute)
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn: !GetAtt TransformQueue.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: |
+          {
+            "message": "Hello from Scheduler"
+          }
+
+  ErrorSchedulerEvent:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression: rate(180 minute)
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn: !GetAtt TransformQueue.Arn
+        RoleArn: !GetAtt SchedulerRole.Arn
+        Input: |
+          {
+            "message": "Error"
+          }
+
+  # Scheduler IAM Role
+  SchedulerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: SchedulerPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt TransformQueue.Arn
+
+  # Группа логов для Step Function
+  StepFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/states/${AWS::StackName}-ExpressTransformEventWorkflow"
+      RetentionInDays: 14
+
+  # IAM Роль для Step Function
+  StepFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !GetAtt TransformLambda.Arn
+              # Разрешения для логирования в CloudWatch Logs
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:DescribeLogGroups
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub "${StepFunctionLogGroup.Arn}:log-stream:*"
+
+  # Машина состояний (State Machine)
+  StepFunction:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: StandardTransformEventWorkflow
+      Role: !GetAtt StepFunctionRole.Arn
+      Type: STANDARD
+      Definition:
+        StartAt: TransformLambdaState
+        States:
+          TransformLambdaState:
+            Type: Task
+            Resource: !GetAtt TransformLambda.Arn
+            End: true
+
+  # EventBridge Pipe for SQS to Step Functions
+  SQSToStepFunctionPipe:
+    Type: AWS::Pipes::Pipe
+    Properties:
+      Name: TransformSQSToStepFunctionPipe
+      Source: !GetAtt TransformQueue.Arn
+      Target: !GetAtt StepFunction.Arn
+      RoleArn: !GetAtt PipeRole.Arn
+      TargetParameters:
+        StepFunctionStateMachineParameters:
+          InvocationType: FIRE_AND_FORGET
+
+  # IAM Роль для Pipe
+  PipeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: pipes.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: PipePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                  - states:DescribeStateMachine
+                Resource: !GetAtt StepFunction.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt TransformQueue.Arn
+
+  # Lambda Функции
+  TransformLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: TransformLambda
+      Handler: main.handler
+      Runtime: python3.11
+      Role: !GetAtt TransformLambdaExecutionRole.Arn
+      CodeUri: ../src/transform_lambda/
+      Environment:
+        Variables:
+          SQS_URL: !Ref BatchingQueue
+
+  BatchProcessingLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: BatchProcessingLambda
+      Handler: main.handler
+      Runtime: python3.11
+      Role: !GetAtt BatchProcessingLambdaExecutionRole.Arn
+      CodeUri: ../src/batch_processing_lambda/
+      Environment:
+        Variables:
+          DYNAMO_TABLE: BatchingTable
+      Events:
+        BatchingQueue:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt BatchingQueue.Arn
+            BatchSize: 10
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
+
+  # IAM Роли для Lambda Функций
+  TransformLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+        - PolicyName: SQSWritePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt BatchingQueue.Arn
+
+  BatchProcessingLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt DynamoDBTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt BatchingQueue.Arn
+
+  # DynamoDB Table
+  DynamoDBTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: BatchingTable
+      PrimaryKey:
+        Name: BatchId
+        Type: String
