@@ -9,7 +9,7 @@ from transform_lambda.main import Message, get_sqs_client, send_to_sqs
 
 @pytest.mark.parametrize(
     "message",
-    ["abc", {"message": "abc"}, Message(message="abc").model_dump_json()],
+    ["abc", json.dumps({"message": "abc"}), Message(message="abc").model_dump_json()],
 )
 def test_success_put_message_into_sqs(env, setup_sqs, message):
     sqs_client = get_sqs_client()
