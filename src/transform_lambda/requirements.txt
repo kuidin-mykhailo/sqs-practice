@@ -1,3 +1,4 @@
 boto3
 aws-lambda-powertools
+aws-lambda-powertools[parser]
 mypy-boto3-sqs

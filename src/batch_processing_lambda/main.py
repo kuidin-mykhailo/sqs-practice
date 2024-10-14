@@ -23,16 +23,19 @@ logger = Logger()
 def get_dynamo_client(region_name: str = "eu-central-1") -> DynamoDBClient:
     return boto3.client("dynamodb", region_name=region_name)
 
+def generate_uuid4():
+    return str(uuid4())
 
 class MyData(BaseModel):
-    batch_id: str = Field(str(uuid4()))
-    name: str = Field(..., alias="Name")
+    batch_id: str = Field(default_factory=generate_uuid4)
+    message: str = Field(..., alias="Message")
+    transformed_at: str = Field(..., alias="transformedAt")
 
     def as_dynamo_item(self):
         return {
             "BatchId": {"S": self.batch_id},
-            "Name": {
-                "S": self.name,
+            "Message": {
+                "S": self.message,
             },
         }
 

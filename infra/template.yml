@@ -125,7 +125,6 @@ Resources:
                   - logs:PutLogEvents
                 Resource: !Sub "${StepFunctionLogGroup.Arn}:log-stream:*"
 
-  # Машина состояний (State Machine)
   StepFunction:
     Type: AWS::Serverless::StateMachine
     Properties:
@@ -133,12 +132,20 @@ Resources:
       Role: !GetAtt StepFunctionRole.Arn
       Type: STANDARD
       Definition:
-        StartAt: TransformLambdaState
+        StartAt: MapTransformExecution
         States:
-          TransformLambdaState:
-            Type: Task
-            Resource: !GetAtt TransformLambda.Arn
-            End: true
+          MapTransformExecution:
+            Type: Map
+            ItemProcessor:
+              ProcessorConfig:
+                Mode: INLINE
+              StartAt: TransformLambdaState
+              States:
+                TransformLambdaState:
+                  Type: Task
+                  Resource: !GetAtt TransformLambda.Arn
+                  End: true
+            End: True
 
   # EventBridge Pipe for SQS to Step Functions
   SQSToStepFunctionPipe:
@@ -192,6 +199,7 @@ Resources:
       Environment:
         Variables:
           SQS_URL: !Ref BatchingQueue
+          DLQ_URL: !Ref TransformDeadLetterQueue
 
   BatchProcessingLambda:
     Type: AWS::Serverless::Function
@@ -242,7 +250,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
-                Resource: !GetAtt BatchingQueue.Arn
+                Resource: 
+                  - !GetAtt BatchingQueue.Arn
+                  - !GetAtt TransformDeadLetterQueue.Arn
 
   BatchProcessingLambdaExecutionRole:
     Type: AWS::IAM::Role

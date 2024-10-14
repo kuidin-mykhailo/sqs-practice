@@ -13,7 +13,7 @@ from batch_processing_lambda.main import (
 def test_store_record_success(env, dynamo_table):
     dynamo_client = get_dynamo_client()
 
-    test_data = MyData(Name="TestName")
+    test_data = MyData(Message="TestName", transformedAt="2012-06-20")
 
     store_record(dynamo_client, test_data)
     response = dynamo_client.get_item(
@@ -22,14 +22,14 @@ def test_store_record_success(env, dynamo_table):
 
     assert "Item" in response
     item = response["Item"]
-    assert item["Name"]["S"] == "TestName"
+    assert item["Message"]["S"] == "TestName"
 
 
 @mock_aws
 def test_store_failed_raise_an_error(env, monkeypatch):
     dynamo_client = get_dynamo_client()
 
-    test_data = MyData(Name="Failed")
+    test_data = MyData(Message="Failed", transformedAt="2012-06-20")
 
     def mock_put_item(*args, **kwargs):
         raise ClientError({"Error": {"Code": "TestError"}}, "PutItem")

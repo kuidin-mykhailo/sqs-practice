@@ -24,11 +24,11 @@ def test_success_handle_sqs_event(env, dynamo_table, lambda_context):
     processor_result = processor
     success_record = {
         "messageId": "message1",
-        "body": json.dumps({"Name": "test1"}),
+        "body": json.dumps({"Message": "test1", "transformedAt": "2012-06-20 10:00:00"}),
     }
     success_record2 = {
         "messageId": "message2",
-        "body": json.dumps({"Name": "test2"}),
+        "body": json.dumps({"Message": "test2", "transformedAt": "2012-06-20 10:00:00"}),
     }
     records = {
         "Records": [
@@ -49,7 +49,7 @@ def test_failed_handle_half_of_records(env, dynamo_table, lambda_context):
     processor_result = processor
     success_record = {
         "messageId": "message1",
-        "body": json.dumps({"Name": "test1"}),
+        "body": json.dumps({"Message": "test1", "transformedAt": "2012-06-20"}),
     }
     failed_record = {
         "messageId": "message2",
