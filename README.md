@@ -37,7 +37,7 @@ sqs-practice/
 2. Clone the repository and navigate to the project directory.
 3. Deploy using SAM:
    ```
-   make build
+   cd infra/
    make deploy
    ```
 
