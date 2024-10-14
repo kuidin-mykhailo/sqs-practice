@@ -43,6 +43,12 @@ sqs-practice/
 
 ## Testing
 
+Install required packages.
+
+```
+pip install pytest moto
+```
+
 Run tests with:
 ```
 pytest tests/batch_processing_lambda/
