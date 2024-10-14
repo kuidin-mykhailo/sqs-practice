@@ -1,13 +1,11 @@
 AWSTemplateFormatVersion: 2010-09-09
 Transform: AWS::Serverless-2016-10-31
 Resources:
-  # Event Bus
   EventBus:
     Type: AWS::Events::EventBus
     Properties:
       Name: DefaultEventBus
 
-  # SQS Queues
   TransformQueue:
     Type: AWS::SQS::Queue
     Properties:
@@ -34,7 +32,6 @@ Resources:
     Properties:
       QueueName: BatchingQueue-DeadLetter
 
-  # Scheduler Events
   MinuteSchedulerEvent:
     Type: AWS::Scheduler::Schedule
     Properties:
@@ -63,7 +60,6 @@ Resources:
             "message": "Error"
           }
 
-  # Scheduler IAM Role
   SchedulerRole:
     Type: AWS::IAM::Role
     Properties:
@@ -84,14 +80,12 @@ Resources:
                   - sqs:SendMessage
                 Resource: !GetAtt TransformQueue.Arn
 
-  # Группа логов для Step Function
   StepFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/states/${AWS::StackName}-ExpressTransformEventWorkflow"
       RetentionInDays: 14
 
-  # IAM Роль для Step Function
   StepFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -111,7 +105,6 @@ Resources:
                 Action:
                   - lambda:InvokeFunction
                 Resource: !GetAtt TransformLambda.Arn
-              # Разрешения для логирования в CloudWatch Logs
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -147,7 +140,6 @@ Resources:
                   End: true
             End: True
 
-  # EventBridge Pipe for SQS to Step Functions
   SQSToStepFunctionPipe:
     Type: AWS::Pipes::Pipe
     Properties:
@@ -159,7 +151,6 @@ Resources:
         StepFunctionStateMachineParameters:
           InvocationType: FIRE_AND_FORGET
 
-  # IAM Роль для Pipe
   PipeRole:
     Type: AWS::IAM::Role
     Properties:
@@ -187,7 +178,6 @@ Resources:
                   - sqs:GetQueueAttributes
                 Resource: !GetAtt TransformQueue.Arn
 
-  # Lambda Функции
   TransformLambda:
     Type: AWS::Serverless::Function
     Properties:
@@ -221,7 +211,6 @@ Resources:
             FunctionResponseTypes:
               - ReportBatchItemFailures
 
-  # IAM Роли для Lambda Функций
   TransformLambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -286,7 +275,6 @@ Resources:
                   - sqs:GetQueueAttributes
                 Resource: !GetAtt BatchingQueue.Arn
 
-  # DynamoDB Table
   DynamoDBTable:
     Type: AWS::Serverless::SimpleTable
     Properties:
