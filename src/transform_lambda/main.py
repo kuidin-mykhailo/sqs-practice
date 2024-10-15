@@ -51,28 +51,30 @@ def send_to_sqs(sqs_client: SQSClient, sqs_url: str, message: str):
         raise e
 
 
-def process_event(sqs_client: SQSClient, event: dict):
+def process_event(event: dict) -> dict:
     try:
         message = Message.model_validate(event)
         message.message = transform_message(message.message)
         logger.info("Sending message to Batching SQS")
-        send_to_sqs(
-            sqs_client, os.environ["SQS_URL"], message.model_dump_json(by_alias=True)
-        )
-    except (ValidationError, ClientError):
+        return message.model_dump_json(by_alias=True)
+        # send_to_sqs(
+        #     sqs_client, os.environ["SQS_URL"], message.model_dump_json(by_alias=True)
+        # )
+    except (ValidationError, ClientError) as e:
         logger.exception("Error transforming message")
-        send_to_sqs(sqs_client, os.environ["DLQ_URL"], json.dumps(event))
+        # send_to_sqs(sqs_client, os.environ["DLQ_URL"], json.dumps(event))
+        raise e
         logger.info(f"Message sent to DLQ: {event}")
 
 
 @logger.inject_lambda_context(log_event=True)
 def handler(event, context: LambdaContext):
     if isinstance(event, dict):
-        sqs_client = get_sqs_client()
-        body = json.loads(event["body"])
-        process_event(sqs_client, body)
+        # sqs_client = get_sqs_client()
+        body = event["parsedBody"]
+        transformed_data = process_event(body)
     else:
         logger.error("Event must be a dictionary. Sending to DLQ.")
-        send_to_sqs(sqs_client, os.environ["DLQ_URL"], json.dumps(event))
+        # send_to_sqs(sqs_client, os.environ["DLQ_URL"], json.dumps(event))
         # Better to return error and handle DLQ forwarding as separate step in StateMachine
-    return {"statusCode": 200}
+    return {"statusCode": 200, "body": transformed_data}

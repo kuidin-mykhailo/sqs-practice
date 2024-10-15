@@ -1,0 +1,60 @@
+{
+	"StartAt": "MapState",
+	"States": {
+		"MapState": {
+			"Type": "Map",
+			"ItemProcessor": {
+				"ProcessorConfig": {
+					"Mode": "INLINE"
+				},
+				"StartAt": "ParseBody",
+				"States": {
+					"ParseBody": {
+						"Type": "Pass",
+						"Parameters": {
+							"data.$": "States.StringToJson($.body)"
+						},
+						"ResultPath": "$.parsedBody",
+						"Next": "ChoiceAnError"
+					},
+					"ChoiceAnError": {
+						"Type": "Choice",
+						"Choices": [
+							{
+								"Variable": "$.parsedBody.data.Message",
+								"StringEquals": "Error",
+								"Next": "SendToDLQ"
+							}
+						],
+						"Default": "TransformLambda"
+					},
+					"TransformLambda": {
+						"Type": "Task",
+						"Resource": "${TransformLambda}",
+						"ResultPath": "$.transformResult",
+						"Next": "SendToBatchingSQS"
+					},
+					"SendToBatchingSQS": {
+						"Type": "Task",
+						"Resource": "arn:aws:states:::sqs:sendMessage",
+						"Parameters": {
+							"QueueUrl": "${BatchingQueueUrl}",
+							"MessageBody.$": "$.transformResult"
+						},
+						"End": true
+					},
+					"SendToDLQ": {
+						"Type": "Task",
+						"Resource": "arn:aws:states:::sqs:sendMessage",
+						"Parameters": {
+							"QueueUrl": "${TransformDLQUrl}",
+							"MessageBody.$": "$.body"
+						},
+						"End": true
+					}
+				}
+			},
+			"End": true
+		}
+	}
+}

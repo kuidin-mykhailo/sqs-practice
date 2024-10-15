@@ -52,7 +52,7 @@ class MyData(BaseModel):
 # - Support PutItem based on `as_dynamo_item`.
 def store_record(client: DynamoDBClient, data: MyData):
     try:
-        client.put_item(
+        client.put_item( # TODO: Made a BatchWriteItem
             TableName=os.environ["DYNAMO_TABLE"], Item=data.as_dynamo_item()
         )
         logger.info("Item %s stored in Table", data)

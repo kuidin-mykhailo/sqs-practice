@@ -6,13 +6,13 @@ import boto3
 from moto import mock_aws
 from pytest import fixture
 
-project_root = Path(__file__).parent.parent.parent
+# project_root = Path(__file__).parent.parent.parent
 
-src_path = os.path.join(project_root, "src")
-sys.path.insert(0, str(src_path))
+# src_path = os.path.join(project_root, "src")
+# sys.path.insert(0, str(src_path))
 
-lambda_path = os.path.join(src_path, "transform_lambda")
-sys.path.insert(0, str(lambda_path))
+# lambda_path = os.path.join(src_path, "transform_lambda")
+# sys.path.insert(0, str(lambda_path))
 
 TEST_SQS_URL = "test-queue"
 TEST_DLQ_URL = "test-dlq"

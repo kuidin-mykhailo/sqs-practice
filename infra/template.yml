@@ -117,6 +117,16 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub "${StepFunctionLogGroup.Arn}:log-stream:*"
+        - PolicyName: SQSWritePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: 
+                  - !GetAtt BatchingQueue.Arn
+                  - !GetAtt TransformDeadLetterQueue.Arn
 
   StepFunction:
     Type: AWS::Serverless::StateMachine
@@ -124,21 +134,11 @@ Resources:
       Name: StandardTransformEventWorkflow
       Role: !GetAtt StepFunctionRole.Arn
       Type: STANDARD
-      Definition:
-        StartAt: MapTransformExecution
-        States:
-          MapTransformExecution:
-            Type: Map
-            ItemProcessor:
-              ProcessorConfig:
-                Mode: INLINE
-              StartAt: TransformLambdaState
-              States:
-                TransformLambdaState:
-                  Type: Task
-                  Resource: !GetAtt TransformLambda.Arn
-                  End: true
-            End: True
+      DefinitionUri: ./state_defenition.asl.json
+      DefinitionSubstitutions:
+        TransformLambda: !GetAtt TransformLambda.Arn
+        BatchingQueueUrl: !Ref BatchingQueue
+        TransformDLQUrl: !Ref TransformDeadLetterQueue
 
   SQSToStepFunctionPipe:
     Type: AWS::Pipes::Pipe
@@ -233,16 +233,6 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: '*'
-        - PolicyName: SQSWritePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - sqs:SendMessage
-                Resource: 
-                  - !GetAtt BatchingQueue.Arn
-                  - !GetAtt TransformDeadLetterQueue.Arn
 
   BatchProcessingLambdaExecutionRole:
     Type: AWS::IAM::Role

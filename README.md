@@ -55,3 +55,14 @@ pytest tests/batch_processing_lambda/
 pytest tests/transform_lambda/
 ```
 
+# IDEAS
+
+Add error handling for DLQ on StateMachine Level
+Add retry logic
+
+KISS Lambda.
+Async could be solved via infra or using Batch calls to AWS Services.
+
+Async\Multithreading - hard to maintence
+
+ResultPath
