@@ -25,6 +25,7 @@ def env():
     os.environ["AWS_SESSION_TOKEN"] = "testing"
     os.environ["SQS_URL"] = TEST_SQS_URL
     os.environ["DLQ_URL"] = TEST_DLQ_URL
+    os.environ["POWERTOOLS_IDEMPOTENCY_DISABLED"] = "1"
 
 
 @fixture
