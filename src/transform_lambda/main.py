@@ -1,14 +1,8 @@
-import json
-import os
 from datetime import datetime
-from functools import lru_cache
-
-import boto3
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.utilities.typing import LambdaContext
 from aws_lambda_powertools.utilities.parser import BaseModel, Field, ValidationError
 from botocore.exceptions import ClientError
-from mypy_boto3_sqs import SQSClient
 
 logger = Logger()
 
@@ -20,11 +14,6 @@ class Message(BaseModel):
     )
 
 
-@lru_cache
-def get_sqs_client(region_name: str = "eu-central-1") -> SQSClient:
-    return boto3.client("sqs", region_name=region_name)
-
-
 def transform_message(message: str):
     """
     Swap case of the message
@@ -32,46 +21,22 @@ def transform_message(message: str):
     return message.swapcase()
 
 
-def send_to_sqs(sqs_client: SQSClient, sqs_url: str, message: str):
-    """
-    Send message to SQS
-
-    Args:
-        sqs_client (SQSClient): SQS client
-        sqs_url (str): SQS URL
-        message (str): Message to send. JSON string.
-    """
-    try:
-        sqs_client.send_message(
-            QueueUrl=sqs_url,
-            MessageBody=message,
-        )
-    except ClientError as e:
-        logger.exception("Error sending message to SQS")
-        raise e
-
-
 def process_event(event: dict) -> dict:
     try:
-        message = Message.model_validate(event)
+        message = Message.parse_obj(event)
         message.message = transform_message(message.message)
         logger.info("Sending message to Batching SQS")
-        return message.model_dump_json(by_alias=True)
-        # send_to_sqs(
-        #     sqs_client, os.environ["SQS_URL"], message.model_dump_json(by_alias=True)
-        # )
+        return message.json(by_alias=True)
     except (ValidationError, ClientError) as e:
         logger.exception("Error transforming message")
-        # send_to_sqs(sqs_client, os.environ["DLQ_URL"], json.dumps(event))
         raise e
-        logger.info(f"Message sent to DLQ: {event}")
 
 
 @logger.inject_lambda_context(log_event=True)
 def handler(event, context: LambdaContext):
     if isinstance(event, dict):
         # sqs_client = get_sqs_client()
-        body = event["parsedBody"]
+        body = event["parsedBody"]["data"]
         transformed_data = process_event(body)
     else:
         logger.error("Event must be a dictionary. Sending to DLQ.")

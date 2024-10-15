@@ -55,6 +55,12 @@ pytest tests/batch_processing_lambda/
 pytest tests/transform_lambda/
 ```
 
+# Layers
+
+Without layers - 715 ms
+Using layers - 420 ms
+
+
 # IDEAS
 
 Add error handling for DLQ on StateMachine Level

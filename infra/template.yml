@@ -186,6 +186,8 @@ Resources:
       Runtime: python3.11
       Role: !GetAtt TransformLambdaExecutionRole.Arn
       CodeUri: ../src/transform_lambda/
+      Layers:
+        - arn:aws:lambda:eu-central-1:763794792219:layer:aws-lambda-powertools-python-layer:1
       Environment:
         Variables:
           SQS_URL: !Ref BatchingQueue
