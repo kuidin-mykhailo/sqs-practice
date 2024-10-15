@@ -35,7 +35,7 @@ Resources:
   MinuteSchedulerEvent:
     Type: AWS::Scheduler::Schedule
     Properties:
-      ScheduleExpression: rate(60 minute)
+      ScheduleExpression: rate(24 hours)
       FlexibleTimeWindow:
         Mode: 'OFF'
       Target:
@@ -49,7 +49,7 @@ Resources:
   ErrorSchedulerEvent:
     Type: AWS::Scheduler::Schedule
     Properties:
-      ScheduleExpression: rate(180 minute)
+      ScheduleExpression: rate(48 hours)
       FlexibleTimeWindow:
         Mode: 'OFF'
       Target:
@@ -202,6 +202,7 @@ Resources:
       Environment:
         Variables:
           DYNAMO_TABLE: BatchingTable
+          IDEMPOTENCY_TABLE: !Ref IdempotencyTable
       Events:
         BatchingQueue:
           Type: SQS
@@ -270,6 +271,13 @@ Resources:
                 Resource: !GetAtt DynamoDBTable.Arn
               - Effect: Allow
                 Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt IdempotencyTable.Arn
+              - Effect: Allow
+                Action:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
@@ -282,3 +290,18 @@ Resources:
       PrimaryKey:
         Name: BatchId
         Type: String
+
+  IdempotencyTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: SqsPracticeIdempotencyTable
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiration
+        Enabled: true
+      BillingMode: PAY_PER_REQUEST

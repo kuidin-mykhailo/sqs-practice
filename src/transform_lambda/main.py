@@ -5,6 +5,7 @@ from functools import lru_cache
 
 import boto3
 from aws_lambda_powertools import Logger
+from aws_lambda_powertools.utilities.typing import LambdaContext
 from aws_lambda_powertools.utilities.parser import BaseModel, Field, ValidationError
 from botocore.exceptions import ClientError
 from mypy_boto3_sqs import SQSClient
@@ -64,8 +65,8 @@ def process_event(sqs_client: SQSClient, event: dict):
         logger.info(f"Message sent to DLQ: {event}")
 
 
-def handler(event, context):
-    logger.info("Input event: %s", event)
+@logger.inject_lambda_context(log_event=True)
+def handler(event, context: LambdaContext):
     if isinstance(event, dict):
         sqs_client = get_sqs_client()
         body = json.loads(event["body"])
